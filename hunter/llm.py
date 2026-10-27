@@ -58,6 +58,10 @@ def _feedback_block() -> str:
     if fb["edits"]:
         parts.append("## Как он правит твои письма (подстраивай стиль)\n" + "\n\n".join(
             f"### {e['title']}\nБЫЛО:\n{e['original_letter']}\nСТАЛО:\n{e['letter']}" for e in fb["edits"]))
+    if fb["outcomes"]:
+        parts.append("## Чем ответили работодатели на его отклики (калибруй оценку по реальным исходам)\n" + "\n".join(
+            f"- {o['title']} / {o['employer']} (ты дал {o['score']}) — "
+            f"{'ОТКАЗ' if o['hh_state'] == 'discard' else 'ПРИГЛАСИЛИ'}" for o in fb["outcomes"]))
     return "\n\n".join(parts)
 
 

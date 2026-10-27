@@ -9,6 +9,8 @@ from .config import DB_PATH, DEFAULT_TITLE_BLACKLIST
 # new → (LLM) scored → [ты] approved → sent
 #                    ↘ skipped (с причиной — идёт в обучение)
 # needs_me — капча / вопросы работодателя / тест: доделываешь руками
+# После отправки hh_state — что сделал работодатель (читаем со страницы откликов):
+# not-viewed → viewed → invitation / interview / hired, или discard
 STATUSES = ("new", "scoring", "scored", "approved", "sending", "sent", "skipped", "needs_me", "error")
 
 SCHEMA = """
@@ -59,6 +61,9 @@ def init():
         cols = {r["name"] for r in c.execute("PRAGMA table_info(vacancies)")}
         if "resume_hash" not in cols:  # миграция: какое резюме отправлять на эту вакансию
             c.execute("ALTER TABLE vacancies ADD COLUMN resume_hash TEXT")
+        if "hh_state" not in cols:  # миграция: ответ работодателя
+            c.execute("ALTER TABLE vacancies ADD COLUMN hh_state TEXT")
+            c.execute("ALTER TABLE vacancies ADD COLUMN hh_state_at TEXT")
 
 
 def get_setting(key, default=None):
@@ -128,6 +133,31 @@ def counts() -> dict:
     return {**{r["status"]: r["n"] for r in rows}, "sent_today": today}
 
 
+INVITED = ("invitation", "interview", "hired")
+
+
+def set_hh_states(states: dict[str, str]) -> list[dict]:
+    """Обновляет ответы работодателей у отправленных. Возвращает те, у кого статус сменился."""
+    changed = []
+    with conn() as c:
+        for r in c.execute("SELECT id, title, employer, hh_state FROM vacancies WHERE status='sent'").fetchall():
+            new = states.get(r["id"])
+            if new and new != r["hh_state"]:
+                c.execute("UPDATE vacancies SET hh_state=?, hh_state_at=? WHERE id=?", (new, now(), r["id"]))
+                changed.append({**dict(r), "old": r["hh_state"], "new": new})
+    return changed
+
+
+def funnel() -> dict:
+    with conn() as c:
+        rows = c.execute("SELECT COALESCE(hh_state, '') s, COUNT(*) n FROM vacancies WHERE status='sent' GROUP BY 1").fetchall()
+    by = {r["s"]: r["n"] for r in rows}
+    sent = sum(by.values())
+    invited = sum(by.get(s, 0) for s in INVITED)
+    return {"sent": sent, "viewed": sent - by.get("not-viewed", 0) - by.get("", 0),
+            "invited": invited, "discard": by.get("discard", 0)}
+
+
 def feedback_examples(limit=12) -> dict:
     """Твои 'disagree' — скармливаем LLM, чтобы он подстраивался."""
     with conn() as c:
@@ -137,7 +167,11 @@ def feedback_examples(limit=12) -> dict:
         edits = c.execute(
             "SELECT title, original_letter, letter FROM vacancies WHERE status='sent' AND original_letter IS NOT NULL "
             "AND letter != original_letter ORDER BY sent_at DESC LIMIT 4").fetchall()
-    return {"skips": [dict(r) for r in skips], "edits": [dict(r) for r in edits]}
+        q = ",".join("?" * len(INVITED))
+        outcomes = c.execute(
+            f"SELECT title, employer, score, hh_state FROM vacancies WHERE status='sent' "
+            f"AND (hh_state IN ({q}) OR hh_state='discard') ORDER BY hh_state_at DESC LIMIT ?", (*INVITED, limit)).fetchall()
+    return {"skips": [dict(r) for r in skips], "edits": [dict(r) for r in edits], "outcomes": [dict(r) for r in outcomes]}
 
 
 # ---------- резюме ----------

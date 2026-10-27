@@ -12,8 +12,8 @@ from fastapi.responses import FileResponse
 from datetime import datetime, timedelta
 
 from . import db, guard, hh, llm
-from .config import (CHROME, DAILY_SEND_LIMIT, HUNT_COOLDOWN_MIN, HUNT_MAX_DETAILS, LLM_CONCURRENCY, PORT,
-                     PREFS_PATH, PROFILE_PATH, REMOTE_AREA, ROOT)
+from .config import (AUTO_HUNT_EVERY_MIN, CHROME, DAILY_SEND_LIMIT, HUNT_COOLDOWN_MIN, HUNT_MAX_DETAILS,
+                     LLM_CONCURRENCY, PORT, PREFS_PATH, PROFILE_PATH, REMOTE_AREA, ROOT, SEND_HOURS, TRACK_EVERY_MIN)
 
 send_wakeup = asyncio.Event()
 score_wakeup = asyncio.Event()
@@ -125,13 +125,55 @@ async def hunt():
         hunt_running = False
 
 
+STATE_NAMES = {"viewed": "просмотрели", "discard": "отказ", "invitation": "приглашение",
+               "interview": "зовут на собеседование", "hired": "выход на работу"}
+
+
+async def track():
+    """Читает страницу откликов hh и записывает, что ответили работодатели."""
+    db.set_setting("last_track", db.now())
+    try:
+        changed = db.set_hh_states(await hh.negotiations())
+    except guard.Blocked as b:
+        db.log(f"ответы не проверил: {b.reason} (до {b.retry_at:%H:%M})", "warn")
+        return
+    for v in changed:
+        if v["new"] in STATE_NAMES:
+            db.log(f"{STATE_NAMES[v['new']]}: {v['title']} — {v['employer']}", "warn" if v["new"] in db.INVITED else "info")
+    db.log(f"ответы проверены: изменилось {len(changed)}")
+
+
+def _due(key: str, minutes: int) -> bool:
+    last = db.get_setting(key)
+    return not last or datetime.now() - datetime.fromisoformat(last) >= timedelta(minutes=minutes)
+
+
+async def autopilot():
+    """Днём сам ищет вакансии и проверяет ответы. Только когда окно Chrome уже открыто:
+    не хотим внезапно поднимать браузер или ломиться в hh без входа."""
+    while True:
+        await asyncio.sleep(random.randint(4, 12) * 60)
+        try:
+            if (not db.get_setting("setup_done") or not db.get_setting("auto_hunt", True)
+                    or not SEND_HOURS[0] <= datetime.now().hour < SEND_HOURS[1]
+                    or guard.paused_until() or not hh._cdp_alive()):
+                continue
+            if _due("last_track", TRACK_EVERY_MIN):
+                await track()
+            if _due("last_hunt", AUTO_HUNT_EVERY_MIN):
+                db.log("автоохота")
+                await hunt()
+        except Exception as e:
+            db.log(f"автопилот споткнулся: {e}", "error")
+
+
 @asynccontextmanager
 async def lifespan(app):
     db.init()
     with db.conn() as c:  # после рестарта возвращаем зависшее
         c.execute("UPDATE vacancies SET status='new' WHERE status='scoring'")
         c.execute("UPDATE vacancies SET status='approved' WHERE status='sending'")
-    tasks = [asyncio.create_task(scorer()), asyncio.create_task(sender())]
+    tasks = [asyncio.create_task(scorer()), asyncio.create_task(sender()), asyncio.create_task(autopilot())]
     if not db.resumes():
         tasks.append(asyncio.create_task(sync_resumes()))
     score_wakeup.set()
@@ -160,7 +202,7 @@ def state():
             "searches": db.get_setting("searches", []), "setup_done": bool(db.get_setting("setup_done")),
             "title_blacklist": db.get_setting("title_blacklist", ""), "llm": llm.backend(),
             "daily_limit": DAILY_SEND_LIMIT, "guard": guard.status(),
-            "next_hunt": _next_hunt()}
+            "next_hunt": _next_hunt(), "funnel": db.funnel(), "auto_hunt": db.get_setting("auto_hunt", True)}
 
 
 def _next_hunt():
@@ -192,6 +234,18 @@ TABS = {
 def list_tab(tab: str):
     order = "sent_at DESC" if tab == "sent" else "updated_at DESC" if tab in ("skipped", "needs") else "score DESC, found_at DESC"
     return db.by_status(*TABS[tab], order=order)
+
+
+@app.post("/api/track")
+async def start_track():
+    await track()
+    return db.funnel()
+
+
+@app.post("/api/auto_hunt")
+def set_auto_hunt(on: bool = Body(..., embed=True)):
+    db.set_setting("auto_hunt", on)
+    return {"ok": True}
 
 
 @app.post("/api/hunt")

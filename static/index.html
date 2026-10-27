@@ -175,6 +175,7 @@
   <span class="meter">отправлено сегодня <b id="sentToday">0</b> из <span id="limit">30</span></span>
   <span class="meter" id="guard"></span>
   <span class="meter" id="browser"></span>
+  <span class="meter" id="funnel"></span>
   <span class="grow"></span>
   <button class="ink" id="huntBtn" onclick="hunt()">Найти вакансии</button>
 </header>
@@ -188,6 +189,8 @@ const TABS = [
   ['queue', 'Разбор'], ['needs', 'Нужен ты'], ['outbox', 'Отправляются'], ['sent', 'Отправлено'],
   ['skipped', 'Мимо'], ['pending', 'Оценивается'], ['resumes', 'Резюме'], ['settings', 'Настройки'],
 ];
+const HH_STATE = {'not-viewed': ['не смотрели', ''], viewed: ['просмотрели', ''], discard: ['отказ', 't-lo'],
+                  invitation: ['приглашение', 't-hi'], interview: ['собеседование', 't-hi'], hired: ['выход на работу', 't-hi']};
 const REASONS = ['мало денег', 'не мой стек', 'неудобный формат', 'грейд выше', 'не нравится компания', 'не моя роль', 'мутная вакансия'];
 let tab = 'queue', items = [], idx = 0, state = {}, resumes = {resumes: [], default: null}, setup = null;
 
@@ -212,6 +215,8 @@ async function refreshState() {
   $('#limit').textContent = state.daily_limit;
   const hot = (a, b) => a / b >= .8 ? 'hot' : '';
   $('#guard').innerHTML = `откликов за час <b class="${hot(g.send.hour, g.send.hour_max)}">${g.send.hour}</b> из ${g.send.hour_max}`;
+  const f = state.funnel;
+  $('#funnel').innerHTML = f.sent ? `ответы: просмотрели <b>${f.viewed}</b>, позвали <b class="${f.invited ? 't-hi' : ''}">${f.invited}</b>, отказ <b>${f.discard}</b> из ${f.sent}` : '';
   $('#huntBtn').textContent = state.hunting ? 'Ищу…' : state.next_hunt ? `Поиск снова в ${hm(state.next_hunt)}` : 'Найти вакансии';
   $('#huntBtn').disabled = state.hunting || !!state.next_hunt;
 
@@ -308,12 +313,14 @@ function journal() {
 function renderList() {
   const extra = v => {
     if (tab === 'needs') return `<button onclick="retry('${v.id}')">Отправить снова</button><button class="quiet" onclick="markSent('${v.id}')">Я отправил сам</button>`;
+    if (tab === 'sent') return v.hh_state ? `<span class="meter ${HH_STATE[v.hh_state]?.[1] || ''}">${HH_STATE[v.hh_state]?.[0] || esc(v.hh_state)}</span>` : '';
     if (tab === 'skipped') return `<button class="quiet" onclick="rescore('${v.id}')">Вернуть</button>`;
     return '';
   };
   const empty = {needs: 'Всё отправилось без твоей помощи.', outbox: 'Очередь отправки пуста.', sent: 'Пока ничего не отправлено.',
                  skipped: 'Ты ещё ничего не отклонял.', pending: 'Все найденные вакансии уже оценены.'}[tab];
-  $('#main').innerHTML = (items.length ? `<div class="list">${items.map(v => `
+  const head = tab === 'sent' ? `<div class="bar" style="margin-bottom:12px"><button class="quiet" onclick="track()">Проверить ответы работодателей</button></div>` : '';
+  $('#main').innerHTML = head + (items.length ? `<div class="list">${items.map(v => `
     <div class="row">
       <div class="sc ${tier(v.score)}">${v.score ?? ''}</div>
       <div class="main"><div class="title"><a href="${hhUrl('/vacancy/' + v.id)}" target="_blank">${esc(v.title)}</a></div>
@@ -353,6 +360,8 @@ async function markSent(id) { await api(`/api/v/${id}/mark_sent`, {}); go(tab); 
 async function retry(id) { const v = items.find(x => x.id === id); await api(`/api/v/${id}/approve`, {letter: v.letter}); toast('Вернул в очередь отправки'); go(tab); }
 async function rescore(id) { await api(`/api/v/${id}/rescore`, {}); go(tab); }
 async function hunt() { await api('/api/hunt', {}); toast('Ищу вакансии — неспешно, несколько минут'); setTimeout(refreshState, 600); }
+async function track() { toast('Смотрю страницу откликов на hh…'); await api('/api/track', {}); go('sent'); }
+async function setAutoHunt(on) { await api('/api/auto_hunt', {on}); toast(on ? 'Автоохота включена' : 'Автоохота выключена'); }
 async function unpause() { await api('/api/unpause', {}); toast('Продолжаю. Если капча вернётся — пауза включится снова'); refreshState(); }
 
 /* ---------- резюме ---------- */
@@ -540,6 +549,11 @@ async function renderSettings() {
     <p class="hint">Параметры поиска hh в JSON: text, area, experience, work_format, search_field.</p>
     <textarea id="searches" class="code">${esc(JSON.stringify(state.searches, null, 2))}</textarea>
     <div class="bar"><button onclick="saveSearches()">Сохранить поиски</button></div>
+
+    <h2>Автопилот</h2>
+    <p class="hint">Днём, пока открыто окно Chrome, программа сама ищет вакансии раз в ~3 часа и проверяет ответы работодателей.
+      Отклики всё равно уходят только после твоего «Отправить».</p>
+    <div class="checks"><label><input type="checkbox" style="width:auto" ${state.auto_hunt ? 'checked' : ''} onchange="setAutoHunt(this.checked)"> Искать и проверять ответы сам</label></div>
 
     <h2>Скрывать вакансии с такими словами в названии</h2>
     <p class="hint">Регулярное выражение, варианты через |. Отсекается до Claude и не тратит токены.</p>

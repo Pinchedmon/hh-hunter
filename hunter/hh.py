@@ -84,9 +84,21 @@ async def _goto(p: Page, url: str, kind: str | None = "read"):
                 raise
             await p.wait_for_timeout(1500)
     await p.wait_for_timeout(600)
+    await _accept_cookies(p)
     body = await p.evaluate("document.body ? document.body.innerText.slice(0, 3000) : ''")
     _alarm(resp.status if resp else 200, "captcha" in p.url or any(m in body for m in CAPTCHA_MARKERS[:2]), url.split("hh.ru")[-1][:40])
     return resp
+
+
+async def _accept_cookies(p: Page):
+    """Плашка про cookies перекрывает форму отклика — закрываем, как закрыл бы человек."""
+    try:
+        btn = p.locator('[data-qa="cookies-policy-informer-accept"]')
+        if await btn.count() and await btn.first.is_visible():
+            await btn.first.click()
+            await p.wait_for_timeout(300)
+    except Exception:
+        pass
 
 
 async def status() -> dict:
@@ -256,6 +268,39 @@ async def apply(vid: str, letter: str, resume: dict | None) -> tuple[str, str]:
                 guard.trip("капча при отклике")
                 return "needs_me", "капча после нажатия — введи её в окне Chrome, письмо уже вставлено"
         return "error", "не дождался подтверждения отклика"
+
+
+# ---------- ответы работодателей ----------
+
+NEGOTIATIONS_JS = """async (pg) => {
+  const r = await fetch('/applicant/negotiations?filter=all&page=' + pg);
+  const h = await r.text();
+  const d = new DOMParser().parseFromString(h, 'text/html');
+  const captcha = !d.querySelector('[data-qa="negotiations-list"], [data-qa="tab-list"]') && /captcha|не робот/i.test(h);
+  const items = [...d.querySelectorAll('[data-qa="negotiations-item"]')].map(it => {
+    const href = it.querySelector('a[href*="/vacancy/"]')?.getAttribute('href') || '';
+    const tags = [...it.querySelectorAll('[data-qa^="negotiations-tag"]')]
+      .map(t => t.getAttribute('data-qa').split(' ').pop().replace('negotiations-item-', ''));
+    return {id: (href.match(/vacancy\\/(\\d+)/) || [])[1], state: tags[0] || ''};
+  }).filter(x => x.id);
+  return {status: r.status, captcha, items};
+}"""
+
+
+async def negotiations(max_pages=5) -> dict[str, str]:
+    """Статусы откликов с hh: vacancy_id → not-viewed | viewed | discard | invitation | interview | hired."""
+    out: dict[str, str] = {}
+    async with lock:
+        p = await page()
+        for pg in range(max_pages):
+            await guard.before("read")
+            r = await p.evaluate(NEGOTIATIONS_JS, pg)
+            _alarm(r["status"], r["captcha"], "откликах")
+            for it in r["items"]:
+                out.setdefault(it["id"], it["state"])
+            if len(r["items"]) < 10:
+                break
+    return out
 
 
 # ---------- твои резюме ----------
