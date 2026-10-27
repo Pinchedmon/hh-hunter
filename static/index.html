@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hh-hunter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&family=Onest:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Стол с письмами: холодный сине-серый стол, белая бумага, чернила, два штемпеля */
+  :root {
+    --desk: #dce3ea; --desk-line: #c3cdd8; --paper: #fcfdfe; --paper-edge: #e6ebf1;
+    --ink: #1b2a41; --ink-soft: #56657a; --ink-faint: #8794a6;
+    --accent: #2f5da8; --ok: #1e7a57; --no: #b3264a; --warm: #a86b12;
+    --focus: 0 0 0 3px rgba(47, 93, 168, .35);
+    --serif: "Literata", Georgia, serif;
+    --sans: "Onest", -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --desk: #121821; --desk-line: #263142; --paper: #1a222e; --paper-edge: #222c3a;
+      --ink: #e4eaf2; --ink-soft: #9aa8bb; --ink-faint: #6b7a8f;
+      --accent: #8db4f0; --ok: #4cc18f; --no: #f06a8a; --warm: #e0a646;
+      --focus: 0 0 0 3px rgba(141, 180, 240, .4);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--desk); }
+  body { margin: 0; color: var(--ink); font: 15px/1.5 var(--sans); min-height: 100vh; }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  :focus-visible { outline: none; box-shadow: var(--focus); border-radius: 6px; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+
+  button { cursor: pointer; border: 1px solid var(--desk-line); background: var(--paper); border-radius: 8px; padding: 8px 14px; transition: border-color .15s; }
+  button:hover { border-color: var(--ink-soft); }
+  button:disabled { opacity: .55; cursor: default; }
+  button.ink { background: var(--ink); color: var(--paper); border-color: var(--ink); font-weight: 600; }
+  button.ink:hover { opacity: .9; }
+  button.quiet { background: none; border-color: transparent; color: var(--ink-soft); }
+  button.quiet:hover { color: var(--ink); }
+  button.no { color: var(--no); }
+  input, select, textarea { background: var(--paper); border: 1px solid var(--desk-line); border-radius: 8px; padding: 9px 12px; width: 100%; }
+  input:focus, select:focus, textarea:focus { outline: none; box-shadow: var(--focus); border-color: var(--accent); }
+  kbd { font: 12px var(--sans); color: inherit; opacity: .6; margin-left: 8px; }
+
+  /* шапка */
+  .top { display: flex; align-items: center; gap: 22px; padding: 14px 28px; flex-wrap: wrap; }
+  .brand { font: 700 22px/1 var(--serif); letter-spacing: -.01em; margin-right: 6px; }
+  .meter { font-size: 13px; color: var(--ink-soft); }
+  .meter b { color: var(--ink); font-weight: 600; }
+  .meter b.hot { color: var(--no); }
+  .grow { flex: 1; }
+  .notice { margin: 0 28px 8px; padding: 10px 16px; border-radius: 10px; background: color-mix(in srgb, var(--warm) 14%, var(--paper)); color: var(--ink); display: flex; gap: 14px; align-items: center; font-size: 14px; }
+  nav { display: flex; gap: 2px; padding: 0 22px; border-bottom: 1px solid var(--desk-line); overflow-x: auto; }
+  nav button { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 12px; color: var(--ink-soft); white-space: nowrap; }
+  nav button.on { color: var(--ink); border-bottom-color: var(--ink); font-weight: 500; }
+  nav .n { color: var(--ink-faint); margin-left: 5px; font-size: 13px; }
+
+  main { max-width: 1180px; margin: 0 auto; padding: 26px 28px 60px; }
+
+  /* разбор: досье слева, письмо справа */
+  .desk { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 28px; align-items: start; }
+  .dossier { padding-top: 6px; }
+  .count { font-size: 13px; color: var(--ink-faint); margin-bottom: 14px; display: flex; gap: 10px; align-items: center; }
+  .head { display: flex; gap: 18px; align-items: flex-start; }
+  .stamp { flex: none; width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center;
+           border: 3px double currentColor; transform: rotate(-7deg); font: 700 28px/1 var(--serif); }
+  .t-hi { color: var(--ok); } .t-mid { color: var(--warm); } .t-lo { color: var(--no); }
+  .dossier h1 { font: 600 24px/1.25 var(--serif); margin: 2px 0 4px; letter-spacing: -.01em; }
+  .dossier h1 a { color: var(--ink); text-decoration: none; }
+  .dossier h1 a:hover { text-decoration: underline; }
+  .employer { color: var(--ink-soft); }
+  dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 20px 0; font-size: 14px; }
+  dl.facts dt { color: var(--ink-faint); }
+  dl.facts dd { margin: 0; }
+  .flag { color: var(--warm); }
+  .summary { font: 400 17px/1.55 var(--serif); margin: 0 0 18px; }
+  .argue { display: grid; gap: 14px; }
+  .argue h3 { font: 600 14px var(--sans); margin: 0 0 4px; }
+  .argue ul { margin: 0; padding-left: 18px; font-size: 14px; color: var(--ink-soft); }
+  .argue li { margin-bottom: 3px; }
+  details { margin-top: 18px; font-size: 14px; }
+  details summary { cursor: pointer; color: var(--accent); }
+  details .body { white-space: pre-wrap; margin-top: 10px; max-height: 380px; overflow: auto; color: var(--ink-soft); line-height: 1.6; }
+
+  .sheet { position: relative; background: var(--paper); border: 1px solid var(--paper-edge); border-radius: 4px;
+           box-shadow: 0 1px 0 var(--paper-edge), 0 18px 40px -24px rgba(27, 42, 65, .45); padding: 34px 40px 26px; }
+  .sheet textarea { border: none; background: transparent; padding: 0; resize: none; overflow: hidden; min-height: 300px;
+                    font: 17px/1.7 var(--serif); max-width: 68ch; display: block; }
+  .sheet textarea:focus { box-shadow: none; }
+  .sheet .foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--paper-edge); margin-top: 18px; padding-top: 16px; font-size: 14px; }
+  .sheet .foot select { width: auto; max-width: 320px; padding: 6px 10px; }
+  .why-resume { color: var(--ink-faint); font-size: 13px; flex-basis: 100%; }
+  .chars { margin-left: auto; color: var(--ink-faint); font-size: 13px; }
+  .actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; align-items: center; }
+  .drawer { display: none; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .drawer.open { display: flex; }
+  .drawer input { flex: 1; min-width: 200px; }
+  .drawer .chip { padding: 6px 12px; border-radius: 99px; font-size: 14px; }
+
+  /* штемпель поверх письма — единственная анимация, отвечает на твоё действие */
+  .postmark { position: absolute; right: 36px; top: 30px; padding: 10px 18px; border: 3px solid currentColor; border-radius: 10px;
+              font: 700 22px/1 var(--serif); letter-spacing: .04em; transform: rotate(-9deg) scale(1.5); opacity: 0; pointer-events: none; }
+  .postmark.show { animation: stamp .32s cubic-bezier(.2, .8, .3, 1.2) forwards; }
+  @keyframes stamp { to { transform: rotate(-9deg) scale(1); opacity: .9; } }
+  @media (prefers-reduced-motion: reduce) { .postmark.show { animation: none; transform: rotate(-9deg); opacity: .9; } }
+
+  /* списки */
+  .list { background: var(--paper); border: 1px solid var(--paper-edge); border-radius: 10px; }
+  .row { display: flex; gap: 16px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--paper-edge); }
+  .row:last-child { border-bottom: none; }
+  .row .sc { width: 34px; font: 700 18px var(--serif); }
+  .row .main { flex: 1; min-width: 0; }
+  .row .title { font-weight: 500; }
+  .row .sub { font-size: 13px; color: var(--ink-faint); }
+  .row .note { font-size: 13px; color: var(--warm); margin-top: 2px; }
+  .empty { text-align: center; padding: 70px 20px; color: var(--ink-soft); }
+  .empty h2 { font: 600 22px var(--serif); color: var(--ink); margin: 0 0 6px; }
+
+  .journal { margin-top: 34px; font-size: 13px; color: var(--ink-faint); max-height: 180px; overflow: auto; }
+  .journal div { padding: 2px 0; }
+  .journal .warn { color: var(--warm); } .journal .error { color: var(--no); }
+  .journal time { display: inline-block; width: 52px; }
+
+  /* настройки, резюме, мастер */
+  .page { max-width: 760px; }
+  .page h2 { font: 600 22px var(--serif); margin: 34px 0 6px; }
+  .page h2:first-child { margin-top: 0; }
+  .page p.hint { color: var(--ink-soft); margin: 0 0 12px; font-size: 14px; }
+  .page textarea.code { min-height: 240px; font: 13px/1.55 ui-monospace, Menlo, monospace; }
+  .page .bar { display: flex; gap: 10px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  label.field { display: grid; gap: 4px; font-size: 14px; color: var(--ink-soft); }
+  .checks { display: flex; gap: 18px; flex-wrap: wrap; font-size: 15px; }
+  .checks label { display: flex; gap: 6px; align-items: center; }
+  .checks input { width: auto; }
+  .ok-line { color: var(--ok); } .bad-line { color: var(--no); }
+
+  .steps { counter-reset: step; display: grid; gap: 14px; margin-top: 22px; }
+  .step { background: var(--paper); border: 1px solid var(--paper-edge); border-radius: 12px; padding: 20px 22px; }
+  .step h3 { font: 600 18px var(--serif); margin: 0 0 6px; display: flex; gap: 12px; align-items: baseline; }
+  .step h3::before { counter-increment: step; content: counter(step); font: 700 15px var(--sans); width: 26px; height: 26px; border-radius: 50%;
+                     display: inline-grid; place-items: center; border: 2px solid var(--desk-line); color: var(--ink-soft); flex: none; }
+  .step.done h3::before { content: "✓"; border-color: var(--ok); color: var(--ok); }
+  .step.locked { opacity: .55; }
+  .suggest { position: relative; }
+  .suggest ul { position: absolute; z-index: 5; left: 0; right: 0; top: 100%; margin: 4px 0 0; padding: 4px; list-style: none; background: var(--paper); border: 1px solid var(--desk-line); border-radius: 8px; }
+  .suggest li { padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--ink); }
+  .suggest li:hover { background: var(--paper-edge); }
+  .suggest li small { color: var(--ink-faint); }
+
+  .draft { background: var(--paper); border: 1px solid var(--paper-edge); border-radius: 10px; padding: 18px 22px; margin-top: 16px; }
+  .draft h4 { margin: 14px 0 4px; display: flex; gap: 10px; align-items: center; font-size: 14px; }
+  .draft h4 button { padding: 2px 10px; font-size: 13px; }
+  .draft .body { white-space: pre-wrap; font-size: 15px; }
+
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translate(-50%, 8px); background: var(--ink); color: var(--paper);
+           padding: 10px 18px; border-radius: 10px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; font-size: 14px; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (max-width: 860px) {
+    .desk { grid-template-columns: 1fr; }
+    .top, main { padding-left: 16px; padding-right: 16px; }
+    nav { padding: 0 10px; }
+    .notice { margin: 0 16px 8px; }
+    .sheet { padding: 24px 20px; }
+    .grid2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header class="top" id="top">
+  <span class="brand">hh-hunter</span>
+  <span class="meter">отправлено сегодня <b id="sentToday">0</b> из <span id="limit">30</span></span>
+  <span class="meter" id="guard"></span>
+  <span class="meter" id="browser"></span>
+  <span class="grow"></span>
+  <button class="ink" id="huntBtn" onclick="hunt()">Найти вакансии</button>
+</header>
+<div id="notice"></div>
+<nav id="nav"></nav>
+<main id="main"></main>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const TABS = [
+  ['queue', 'Разбор'], ['needs', 'Нужен ты'], ['outbox', 'Отправляются'], ['sent', 'Отправлено'],
+  ['skipped', 'Мимо'], ['pending', 'Оценивается'], ['resumes', 'Резюме'], ['settings', 'Настройки'],
+];
+const REASONS = ['мало денег', 'не мой стек', 'неудобный формат', 'грейд выше', 'не нравится компания', 'не моя роль', 'мутная вакансия'];
+let tab = 'queue', items = [], idx = 0, state = {}, resumes = {resumes: [], default: null}, setup = null;
+
+const $ = s => document.querySelector(s);
+const esc = s => (s ?? '').toString().replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+const hhUrl = path => 'https://hh.ru' + path;
+async function api(url, body) {
+  const r = await fetch(url, body === undefined ? {} : {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)});
+  if (!r.ok) { let m = await r.text(); try { m = JSON.parse(m).detail || m; } catch {} throw new Error(m); }
+  return r.json();
+}
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2600); }
+const hm = iso => iso ? iso.slice(11, 16) : '';
+const tier = s => s >= 70 ? 't-hi' : s >= 45 ? 't-mid' : 't-lo';
+
+/* ---------- состояние и шапка ---------- */
+
+async function refreshState() {
+  state = await api('/api/state');
+  const c = state.counts, g = state.guard;
+  $('#sentToday').textContent = c.sent_today || 0;
+  $('#limit').textContent = state.daily_limit;
+  const hot = (a, b) => a / b >= .8 ? 'hot' : '';
+  $('#guard').innerHTML = `откликов за час <b class="${hot(g.send.hour, g.send.hour_max)}">${g.send.hour}</b> из ${g.send.hour_max}`;
+  $('#huntBtn').textContent = state.hunting ? 'Ищу…' : state.next_hunt ? `Поиск снова в ${hm(state.next_hunt)}` : 'Найти вакансии';
+  $('#huntBtn').disabled = state.hunting || !!state.next_hunt;
+
+  const night = new Date().getHours() < g.send_hours[0] || new Date().getHours() >= g.send_hours[1];
+  let notice = '';
+  if (g.paused_until) notice = `<div class="notice">hh насторожился (${esc(g.pause_reason)}), всё стоит до ${hm(g.paused_until)}. Если в окне Chrome капча — пройди её.
+      <span class="grow"></span><button onclick="unpause()">Продолжить сейчас</button></div>`;
+  else if (night && (c.approved || 0)) notice = `<div class="notice">Ночью отклики не уходят. Одобренные (${c.approved}) отправятся после ${g.send_hours[0]}:00.</div>`;
+  else if (state.llm.kind === 'none') notice = `<div class="notice">Claude не подключён — вакансии не оцениваются. <span class="grow"></span><button onclick="renderSetup()">Подключить</button></div>`;
+  $('#notice').innerHTML = notice;
+
+  const n = {queue: c.scored, needs: (c.needs_me || 0) + (c.error || 0), outbox: (c.approved || 0) + (c.sending || 0),
+             sent: c.sent, skipped: c.skipped, pending: (c.new || 0) + (c.scoring || 0)};
+  $('#nav').innerHTML = TABS.map(([k, label]) =>
+    `<button class="${k === tab ? 'on' : ''}" onclick="go('${k}')">${label}${n[k] ? `<span class="n">${n[k]}</span>` : ''}</button>`).join('');
+}
+
+async function go(t) {
+  tab = t; idx = 0;
+  await refreshState();
+  if (t === 'settings') return renderSettings();
+  if (t === 'resumes') return renderResumes();
+  items = await api('/api/list/' + t);
+  render();
+}
+
+/* ---------- разбор: одна вакансия за раз ---------- */
+
+function render() {
+  if (tab !== 'queue') return renderList();
+  const v = items[idx];
+  if (!v) {
+    const pending = (state.counts.new || 0) + (state.counts.scoring || 0);
+    $('#main').innerHTML = `<div class="empty"><h2>${pending ? 'Claude читает вакансии' : 'Разбирать нечего'}</h2>
+      ${pending ? `Осталось оценить ${pending} — они появятся здесь сами.` : state.next_hunt ? `Следующий поиск можно запустить в ${hm(state.next_hunt)}.` : 'Нажми «Найти вакансии» — программа соберёт свежие с hh.'}</div>${journal()}`;
+    return;
+  }
+  const vd = v.verdict || {};
+  const pick = v.resume_hash || resumes.default;
+  $('#main').innerHTML = `
+  <div class="desk">
+    <section class="dossier">
+      <div class="count">Вакансия ${idx + 1} из ${items.length}<span class="grow"></span>
+        <button class="quiet" onclick="move(-1)" aria-label="предыдущая">←</button><button class="quiet" onclick="move(1)" aria-label="следующая">→</button></div>
+      <div class="head">
+        <div class="stamp ${tier(v.score)}" title="Оценка Claude: насколько подходит и есть ли шанс на приглашение">${v.score ?? '–'}</div>
+        <div><h1><a href="${hhUrl('/vacancy/' + v.id)}" target="_blank">${esc(v.title)}</a></h1>
+          <div class="employer">${esc(v.employer)}</div></div>
+      </div>
+      <dl class="facts">
+        <dt>Зарплата</dt><dd>${esc(v.salary || 'не указана')}${vd.salary_note ? `<br><span style="color:var(--ink-soft)">${esc(vd.salary_note)}</span>` : ''}</dd>
+        <dt>Формат</dt><dd>${esc(v.work_format || '—')}</dd>
+        <dt>Опыт</dt><dd>${esc(v.experience || '—')}</dd>
+        ${v.address ? `<dt>Где</dt><dd>${esc(v.address)}</dd>` : ''}
+        ${v.letter_required || v.has_test ? `<dt>Важно</dt><dd class="flag">${[v.letter_required && 'письмо обязательно', v.has_test && 'есть тест'].filter(Boolean).join(', ')}</dd>` : ''}
+      </dl>
+      ${vd.summary ? `<p class="summary">${esc(vd.summary)}</p>` : ''}
+      <div class="argue">
+        ${(vd.why || []).length ? `<div><h3>Почему да</h3><ul>${vd.why.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+        ${(vd.risks || []).length ? `<div><h3>Риски</h3><ul>${vd.risks.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+      </div>
+      <details><summary>Текст вакансии</summary><div class="body">${esc(v.description)}${v.skills ? '\n\nНавыки: ' + esc(v.skills) : ''}</div></details>
+    </section>
+    <section>
+      <div class="sheet" id="sheet">
+        <div class="postmark" id="postmark"></div>
+        <textarea id="letter" aria-label="Сопроводительное письмо" oninput="grow(this); $('#chars').textContent = this.value.length + ' знаков'">${esc(v.letter)}</textarea>
+        <div class="foot">
+          <span>Резюме</span>
+          <select id="resumeSel" aria-label="Резюме для отклика">${resumes.resumes.map(r =>
+            `<option value="${r.hash}" ${r.hash === pick ? 'selected' : ''} ${r.visible ? '' : 'disabled'}>${esc(r.title)}${r.visible ? '' : ' (скрыто)'}</option>`).join('')}</select>
+          <span class="chars" id="chars">${(v.letter || '').length} знаков</span>
+          ${vd.resume_why ? `<span class="why-resume">${esc(vd.resume_why)}</span>` : ''}
+        </div>
+      </div>
+      <div class="actions">
+        <button class="ink" onclick="approve()">Отправить отклик<kbd>⌘ Enter</kbd></button>
+        <button onclick="toggle('#rewrite')">Переписать</button>
+        <button class="no" onclick="toggle('#reasons')">Мимо</button>
+      </div>
+      <div class="drawer" id="rewrite"><input id="comment" placeholder="Что поменять: короче, проще тон, упомяни проект…" onkeydown="if(event.key==='Enter')rewrite()"><button onclick="rewrite()">Переписать</button></div>
+      <div class="drawer" id="reasons">${REASONS.map(r => `<button class="chip" onclick="skip('${r}')">${r}</button>`).join('')}
+        <input id="reason" placeholder="Своя причина и Enter" onkeydown="if(event.key==='Enter')skip(this.value)"></div>
+    </section>
+  </div>${journal()}`;
+  grow($('#letter'));
+}
+function grow(ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 4 + 'px'; }
+
+function journal() {
+  return `<div class="journal" aria-label="журнал">${(state.log || []).map(l => `<div class="${l.level}"><time>${l.ts.slice(11, 16)}</time>${esc(l.msg)}</div>`).join('')}</div>`;
+}
+
+function renderList() {
+  const extra = v => {
+    if (tab === 'needs') return `<button onclick="retry('${v.id}')">Отправить снова</button><button class="quiet" onclick="markSent('${v.id}')">Я отправил сам</button>`;
+    if (tab === 'skipped') return `<button class="quiet" onclick="rescore('${v.id}')">Вернуть</button>`;
+    return '';
+  };
+  const empty = {needs: 'Всё отправилось без твоей помощи.', outbox: 'Очередь отправки пуста.', sent: 'Пока ничего не отправлено.',
+                 skipped: 'Ты ещё ничего не отклонял.', pending: 'Все найденные вакансии уже оценены.'}[tab];
+  $('#main').innerHTML = (items.length ? `<div class="list">${items.map(v => `
+    <div class="row">
+      <div class="sc ${tier(v.score)}">${v.score ?? ''}</div>
+      <div class="main"><div class="title"><a href="${hhUrl('/vacancy/' + v.id)}" target="_blank">${esc(v.title)}</a></div>
+        <div class="sub">${esc(v.employer)}${v.salary ? ', ' + esc(v.salary) : ''}${v.sent_at ? ', отправлено ' + v.sent_at.replace('T', ' в ').slice(0, 19) : ''}</div>
+        ${v.note ? `<div class="note">${esc(v.note)}</div>` : ''}
+        ${tab === 'needs' && v.letter ? `<details><summary>Письмо</summary><div class="body">${esc(v.letter)}</div></details>` : ''}</div>
+      ${extra(v)}
+    </div>`).join('')}</div>` : `<div class="empty">${empty}</div>`) + journal();
+}
+
+function toggle(sel) { const el = $(sel); el.classList.toggle('open'); el.querySelector('input')?.focus(); }
+function move(d) { idx = Math.max(0, Math.min(items.length - 1, idx + d)); render(); }
+function stampThen(text, cls, fn) {
+  const pm = $('#postmark'); pm.textContent = text; pm.className = 'postmark show ' + cls;
+  setTimeout(fn, matchMedia('(prefers-reduced-motion: reduce)').matches ? 250 : 650);
+}
+function next() { items.splice(idx, 1); if (idx >= items.length) idx = Math.max(0, items.length - 1); refreshState().then(render); }
+
+async function approve() {
+  const v = items[idx];
+  await api(`/api/v/${v.id}/approve`, {letter: $('#letter').value, resume_hash: $('#resumeSel')?.value || ''});
+  stampThen('Отправлено', 't-hi', () => { toast('Отклик в очереди: ' + v.employer); next(); });
+}
+async function skip(reason) {
+  const v = items[idx];
+  await api(`/api/v/${v.id}/skip`, {reason});
+  stampThen('Мимо', 't-lo', () => { toast(reason ? 'Учту: ' + reason : 'Пропущено'); next(); });
+}
+async function rewrite() {
+  const v = items[idx], comment = $('#comment').value.trim();
+  if (!comment) return;
+  const ta = $('#letter'), current = ta.value; ta.disabled = true; ta.value = 'Claude переписывает письмо…';
+  try { const r = await api(`/api/v/${v.id}/rewrite`, {comment, letter: current}); v.letter = r.letter; render(); }
+  catch (e) { toast(e.message); render(); }
+}
+async function markSent(id) { await api(`/api/v/${id}/mark_sent`, {}); go(tab); }
+async function retry(id) { const v = items.find(x => x.id === id); await api(`/api/v/${id}/approve`, {letter: v.letter}); toast('Вернул в очередь отправки'); go(tab); }
+async function rescore(id) { await api(`/api/v/${id}/rescore`, {}); go(tab); }
+async function hunt() { await api('/api/hunt', {}); toast('Ищу вакансии — неспешно, несколько минут'); setTimeout(refreshState, 600); }
+async function unpause() { await api('/api/unpause', {}); toast('Продолжаю. Если капча вернётся — пауза включится снова'); refreshState(); }
+
+/* ---------- резюме ---------- */
+
+async function renderResumes() {
+  resumes = await api('/api/resumes');
+  const drafts = await api('/api/resume_drafts');
+  $('#main').innerHTML = `<div class="page">
+    <h2>Твои резюме на hh</h2>
+    <p class="hint">Под каждую вакансию Claude выбирает подходящее резюме — его видно и можно поменять в разборе. Отмеченное здесь используется, когда выбрать не из чего.</p>
+    <div class="list">${resumes.resumes.map(r => `<div class="row">
+      <input type="radio" name="defres" style="width:auto" aria-label="по умолчанию" ${r.hash === resumes.default ? 'checked' : ''} ${r.visible ? '' : 'disabled'} onchange="setDefault('${r.hash}')">
+      <div class="main"><div class="title"><a href="${hhUrl('/resume/' + r.hash)}" target="_blank">${esc(r.title)}</a></div>
+        <div class="sub">${r.visible ? 'Видно работодателям' : 'Скрыто — с ним нельзя откликаться'}</div></div>
+      ${r.visible ? '' : `<a href="${hhUrl('/resume/edit/' + r.hash + '/visibility')}" target="_blank"><button>Открыть на hh</button></a>`}
+    </div>`).join('') || '<div class="empty">Резюме ещё не загружены.</div>'}</div>
+    <div class="bar"><button onclick="syncResumes(this)">Обновить с hh</button></div>
+
+    <h2>Новое резюме под направление</h2>
+    <p class="hint">Claude соберёт резюме из фактов твоего профиля по полям hh. Создаёшь его на hh сам, копируя блоки, потом нажимаешь «Обновить с hh».</p>
+    <label class="field">Направление<input id="dirInput" placeholder="Например: fullstack TypeScript, backend на Go, аналитик данных"></label>
+    <label class="field" style="margin-top:10px">Пожелания<input id="dirNotes" placeholder="Необязательно: сделать акцент на удалёнке, убрать старый опыт"></label>
+    <div class="bar"><button class="ink" onclick="makeResume(this)">Собрать резюме</button></div>
+    <div>${drafts.map(draftHtml).join('')}</div></div>`;
+}
+function copyBtn(text) { return `<button onclick="navigator.clipboard.writeText(decodeURIComponent('${encodeURIComponent(text)}'));toast('Скопировано')">Копировать</button>`; }
+function draftHtml(d) {
+  const c = d.content;
+  const exp = (c.experience || []).map(e => `${e.position}, ${e.company} (${e.period})\n` + (e.bullets || []).map(b => '• ' + b).join('\n')).join('\n\n');
+  const block = (name, text) => text ? `<h4>${name} ${copyBtn(text)}</h4><div class="body">${esc(text)}</div>` : '';
+  return `<div class="draft"><div style="color:var(--ink-faint);font-size:13px">${esc(d.direction)}, ${esc((d.created_at || '').replace('T', ' ').slice(0, 16))}</div>
+    ${block('Должность', c.title)}${block('Зарплата', c.salary)}${block('О себе', c.about)}${block('Навыки', (c.skills || []).join(', '))}
+    ${block('Опыт', exp)}${block('Проекты', (c.projects || []).map(x => '• ' + x).join('\n'))}
+    ${(c.tips || []).length ? `<h4>Что ещё поправить</h4><ul>${c.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}</div>`;
+}
+async function syncResumes(btn) { btn.disabled = true; btn.textContent = 'Читаю hh…'; try { await api('/api/resumes/sync', {}); } catch (e) { toast(e.message); } renderResumes(); }
+async function setDefault(hash) { await api('/api/default_resume', {hash}); resumes.default = hash; toast('Готово'); }
+async function makeResume(btn) {
+  const direction = $('#dirInput').value.trim();
+  if (!direction) return toast('Напиши направление');
+  btn.disabled = true; btn.textContent = 'Claude собирает, около минуты…';
+  try { await api('/api/resume_drafts', {direction, notes: $('#dirNotes').value}); renderResumes(); }
+  catch (e) { toast(e.message); btn.disabled = false; btn.textContent = 'Собрать резюме'; }
+}
+
+/* ---------- мастер настройки ---------- */
+
+async function renderSetup() {
+  setup = await api('/api/setup');
+  const s = setup, llmOk = s.llm.kind !== 'none', hhOk = s.logged && s.resumes > 0, f = s.prefs_form || {};
+  const fmt = f.formats || ['remote', 'hybrid'];
+  document.body.classList.add('wizard');
+  $('#top').style.display = $('#nav').style.display = $('#notice').style.display = 'none';
+  $('#main').innerHTML = `<div class="page">
+    <h2 style="font-size:30px">Настроим под тебя</h2>
+    <p class="hint">Четыре шага, минут десять. Всё хранится только на этом компьютере, в папке data.</p>
+    <div class="steps">
+      <div class="step ${llmOk ? 'done' : ''}">
+        <h3>Подключи Claude</h3>
+        <p class="hint">Claude оценивает вакансии и пишет письма. Нужен API-ключ: console.anthropic.com, раздел API keys.
+          ${s.llm.kind === 'cli' ? 'Сейчас работает через установленный Claude Code — ключ можно не вводить.' : ''}</p>
+        ${s.key_hint ? `<p class="ok-line">Ключ сохранён (${esc(s.key_hint)}), модель ${esc(s.llm.model)}.</p>` : ''}
+        <div class="grid2"><input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="API-ключ">
+          <select id="model" aria-label="Модель">${s.models.map(m => `<option ${m === (s.llm.model || '') ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
+        <div class="bar"><button class="ink" onclick="saveLlm(this)">Проверить и сохранить</button><span id="llmMsg"></span></div>
+      </div>
+
+      <div class="step ${hhOk ? 'done' : ''} ${llmOk ? '' : 'locked'}">
+        <h3>Войди в hh.ru</h3>
+        <p class="hint">Откроется отдельное окно Chrome. Войди там в свой аккаунт соискателя как обычно — пароль вводишь ты, программа его не видит.
+          Окно потом не закрывай: через него идут поиск и отклики.</p>
+        ${s.chrome ? '' : '<p class="bad-line">Google Chrome не найден — установи его и перезапусти программу.</p>'}
+        <div class="bar"><button onclick="openHh(this)">Открыть hh.ru</button><button class="ink" onclick="checkHh(this)">Я вошёл, проверить</button>
+          <span id="hhMsg">${hhOk ? `<span class="ok-line">Вход есть, резюме: ${s.resumes}</span>` : ''}</span></div>
+      </div>
+
+      <div class="step ${s.profile ? 'done' : ''} ${hhOk ? '' : 'locked'}">
+        <h3>Проверь профиль</h3>
+        <p class="hint">Это факты о тебе, из которых Claude пишет письма. Ничего сверх этого текста он не напишет. Черновик собирается из твоих резюме — прочитай, исправь пункты с ⚠️, допиши свои проекты.</p>
+        <textarea id="profileText" class="code" placeholder="Нажми «Собрать из резюме»"></textarea>
+        <div class="bar"><button onclick="draftProfile(this)">Собрать из резюме</button><button class="ink" onclick="saveProfile()">Сохранить профиль</button></div>
+      </div>
+
+      <div class="step ${s.setup_done ? 'done' : ''} ${s.profile ? '' : 'locked'}">
+        <h3>Что ищем</h3>
+        <p class="hint">По этому Claude оценивает вакансии, а программа строит поиски на hh.</p>
+        <div class="grid2">
+          <label class="field">Город<div class="suggest"><input id="city" value="${esc(s.city?.name || '')}" data-id="${esc(s.city?.id || '')}" autocomplete="off" oninput="citySuggest(this)"><ul id="cityList" hidden></ul></div></label>
+          <label class="field">Уровень<select id="grade">
+            ${[['none', 'Без опыта'], ['junior', 'Junior, 1–3 года'], ['middle', 'Middle, 3–6 лет'], ['any', 'Любой']].map(([k, t]) => `<option value="${k}" ${f.grade === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+          <label class="field">Зарплата на руки, комфортно<input id="salC" inputmode="numeric" value="${esc(f.salary_comfort || '')}" placeholder="120000"></label>
+          <label class="field">Рассматриваю от<input id="salM" inputmode="numeric" value="${esc(f.salary_min || '')}" placeholder="90000"></label>
+        </div>
+        <div class="checks" style="margin:14px 0">
+          ${[['remote', 'Удалёнка'], ['hybrid', 'Гибрид'], ['office', 'Офис']].map(([k, t]) => `<label><input type="checkbox" name="fmt" value="${k}" ${fmt.includes(k) ? 'checked' : ''}>${t}</label>`).join('')}
+          <label><input type="checkbox" id="reloc" ${f.relocate ? 'checked' : ''}>Готов к переезду</label>
+        </div>
+        <label class="field">Ключевые слова для поиска, через запятую<input id="kw" value="${esc(f.keywords || '')}" placeholder="python, fastapi, backend"></label>
+        <label class="field" style="margin-top:10px">Направления по приоритету<input id="dirs" value="${esc(f.directions || '')}" placeholder="Python backend, потом fullstack"></label>
+        <label class="field" style="margin-top:10px">Не хочу<input id="avoid" value="${esc(f.avoid || '')}" placeholder="1С, поддержка без кода, стажировки"></label>
+        <div class="bar"><button class="ink" onclick="savePrefs(this)">Сохранить и начать</button></div>
+      </div>
+    </div>
+    ${s.setup_done ? '<div class="bar" style="margin-top:20px"><button class="quiet" onclick="leaveSetup()">Вернуться к разбору</button></div>' : ''}
+  </div>`;
+  if (s.profile) api('/api/doc/profile').then(d => { $('#profileText').value = d.text; });
+}
+async function leaveSetup() {
+  document.body.classList.remove('wizard');
+  $('#top').style.display = $('#nav').style.display = $('#notice').style.display = '';
+  resumes = await api('/api/resumes'); go('queue'); checkBrowser();
+}
+async function saveLlm(btn) {
+  btn.disabled = true; $('#llmMsg').textContent = 'Проверяю…';
+  try { await api('/api/setup/llm', {api_key: $('#apiKey').value, model: $('#model').value}); renderSetup(); toast('Claude подключён'); }
+  catch (e) { $('#llmMsg').innerHTML = `<span class="bad-line">${esc(e.message)}</span>`; btn.disabled = false; }
+}
+async function openHh() { try { await api('/api/setup/hh/open', {}); toast('Окно Chrome открыто — войди в hh'); } catch (e) { toast(e.message); } }
+async function checkHh(btn) {
+  btn.disabled = true; $('#hhMsg').textContent = 'Проверяю вход и загружаю резюме…';
+  try {
+    const r = await api('/api/setup/hh/check', {});
+    if (r.logged) { toast(`Вход есть, резюме: ${r.resumes}`); renderSetup(); }
+    else $('#hhMsg').innerHTML = '<span class="bad-line">Не вижу входа. Войди в окне Chrome и нажми снова.</span>';
+  } catch (e) { $('#hhMsg').innerHTML = `<span class="bad-line">${esc(e.message)}</span>`; }
+  btn.disabled = false;
+}
+async function draftProfile(btn) {
+  btn.disabled = true; btn.textContent = 'Claude читает резюме…';
+  try { $('#profileText').value = (await api('/api/setup/profile/draft', {})).text; toast('Черновик готов — проверь и сохрани'); }
+  catch (e) { toast(e.message); }
+  btn.disabled = false; btn.textContent = 'Собрать из резюме';
+}
+async function saveProfile() {
+  const text = $('#profileText').value.trim();
+  if (text.length < 50) return toast('Профиль слишком короткий');
+  await api('/api/doc/profile', {text}); toast('Профиль сохранён'); renderSetup();
+}
+let cityTimer;
+function citySuggest(inp) {
+  inp.dataset.id = '';
+  clearTimeout(cityTimer);
+  cityTimer = setTimeout(async () => {
+    const list = $('#cityList'), found = await api('/api/areas?q=' + encodeURIComponent(inp.value));
+    list.hidden = !found.length;
+    list.innerHTML = found.map(a => `<li data-id="${esc(a.id)}" data-name="${esc(a.name)}">${esc(a.name)} <small>${esc(a.region)}</small></li>`).join('');
+    list.querySelectorAll('li').forEach(li => li.onclick = () => { inp.value = li.dataset.name; inp.dataset.id = li.dataset.id; list.hidden = true; });
+  }, 350);
+}
+async function savePrefs() {
+  const gradeSel = $('#grade');
+  const form = {
+    city: {id: $('#city').dataset.id, name: $('#city').value}, grade: gradeSel.value, grade_text: gradeSel.selectedOptions[0].textContent,
+    salary_comfort: $('#salC').value, salary_min: $('#salM').value,
+    formats: [...document.querySelectorAll('input[name=fmt]:checked')].map(x => x.value), relocate: $('#reloc').checked,
+    keywords: $('#kw').value, directions: $('#dirs').value, avoid: $('#avoid').value,
+  };
+  if (!form.city.id) return toast('Выбери город из подсказки');
+  try { const r = await api('/api/setup/prefs', {form}); toast(`Готово: ${r.searches.length} поисков на hh`); leaveSetup(); }
+  catch (e) { toast(e.message); }
+}
+
+/* ---------- настройки ---------- */
+
+async function renderSettings() {
+  const [profile, prefs] = await Promise.all([api('/api/doc/profile'), api('/api/doc/prefs')]);
+  const l = state.llm;
+  $('#main').innerHTML = `<div class="page">
+    <h2>Подключения и анкета</h2>
+    <p class="hint">Claude: ${l.kind === 'api' ? `API-ключ, модель ${esc(l.model)}` : l.kind === 'cli' ? 'через Claude Code на этом компьютере' : '<span class="bad-line">не подключён</span>'}.
+      Ключ, вход в hh и анкета «что ищем» меняются в мастере.</p>
+    <div class="bar"><button onclick="renderSetup()">Открыть мастер настройки</button></div>
+
+    <h2>Профиль</h2>
+    <p class="hint">Единственный источник фактов для писем.</p>
+    <textarea id="profile" class="code">${esc(profile.text)}</textarea>
+    <div class="bar"><button onclick="saveDoc('profile')">Сохранить профиль</button></div>
+
+    <h2>Что ищу</h2>
+    <p class="hint">По этому тексту Claude оценивает вакансии. Можно дописать руками.</p>
+    <textarea id="prefs" class="code" style="min-height:160px">${esc(prefs.text)}</textarea>
+    <div class="bar"><button onclick="saveDoc('prefs')">Сохранить</button></div>
+
+    <h2>Поиски на hh</h2>
+    <p class="hint">Параметры поиска hh в JSON: text, area, experience, work_format, search_field.</p>
+    <textarea id="searches" class="code">${esc(JSON.stringify(state.searches, null, 2))}</textarea>
+    <div class="bar"><button onclick="saveSearches()">Сохранить поиски</button></div>
+
+    <h2>Скрывать вакансии с такими словами в названии</h2>
+    <p class="hint">Регулярное выражение, варианты через |. Отсекается до Claude и не тратит токены.</p>
+    <input id="blacklist" value="${esc(state.title_blacklist)}">
+    <div class="bar"><button onclick="saveBlacklist()">Сохранить</button></div>
+
+    <h2>Добавить вакансию по ссылке</h2>
+    <input id="addUrl" placeholder="https://hh.ru/vacancy/123456789" onkeydown="if(event.key==='Enter')addVac()">
+    ${journal()}</div>`;
+}
+async function saveDoc(name) { await api('/api/doc/' + name, {text: $('#' + name).value}); toast('Сохранено'); }
+async function saveSearches() {
+  try { await api('/api/searches', {searches: JSON.parse($('#searches').value)}); toast('Сохранено'); }
+  catch (e) { toast('JSON с ошибкой: ' + e.message); }
+}
+async function saveBlacklist() { try { await api('/api/title_blacklist', {value: $('#blacklist').value}); toast('Сохранено'); } catch (e) { toast(e.message); } }
+async function addVac() { try { await api('/api/add', {url: $('#addUrl').value}); $('#addUrl').value = ''; toast('Добавил — Claude оценит'); } catch (e) { toast(e.message); } }
+
+async function checkBrowser() {
+  try {
+    const b = await api('/api/browser');
+    $('#browser').innerHTML = b.blocked ? 'hh на паузе' : b.logged ? 'hh: вход есть' : '<b class="hot">hh: нужно войти</b>';
+  } catch (e) { $('#browser').textContent = 'hh: ' + e.message.slice(0, 50); }
+}
+
+/* ---------- клавиатура и автообновление ---------- */
+
+document.addEventListener('keydown', e => {
+  if (tab !== 'queue' || !items[idx] || document.body.classList.contains('wizard')) return;
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); approve(); }
+  else if (!['TEXTAREA', 'INPUT', 'SELECT'].includes(document.activeElement.tagName)) {
+    if (e.key === 'ArrowRight') move(1); if (e.key === 'ArrowLeft') move(-1);
+  }
+});
+
+setInterval(async () => {
+  if (document.body.classList.contains('wizard')) return;
+  const before = JSON.stringify(state.counts);
+  await refreshState();
+  if (tab === 'queue' && !items.length && JSON.stringify(state.counts) !== before) go('queue');
+  else if (['outbox', 'needs', 'pending'].includes(tab)) { items = await api('/api/list/' + tab); render(); }
+}, 5000);
+
+(async () => {
+  await refreshState();
+  if (!state.setup_done) return renderSetup();
+  resumes = await api('/api/resumes');
+  go('queue'); checkBrowser();
+})();
+</script>
+</body>
+</html>
